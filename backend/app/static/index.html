@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PII Guard</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--tx:#12202f;--mut:#667085;--bd:#dfe7f1;--ac:#2563eb;--ac-2:#38bdf8;--ok:#0f766e;--warn:#b45309;--danger:#b42318;--shadow:0 18px 35px rgba(15,23,42,.08)}
+@media(prefers-color-scheme:dark){:root{--bg:#091321;--card:#101b2d;--tx:#e6edf7;--mut:#9aa7bc;--bd:#23314d;--shadow:0 18px 35px rgba(2,6,23,.45)}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(180deg,var(--bg),#eef4ff 45%,var(--bg));color:var(--tx);display:flex;min-height:100vh}
+nav{width:220px;background:rgba(255,255,255,.75);backdrop-filter:blur(8px);border-right:1px solid var(--bd);padding:18px 16px;position:sticky;top:0;height:100vh}
+nav h2{font-size:18px;margin:0 0 18px;background:linear-gradient(90deg,var(--ac),var(--ac-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+nav a{display:block;padding:10px 12px;border-radius:10px;color:var(--tx);cursor:pointer;margin:4px 0;font-weight:600;transition:.2s ease}
+nav a.on,nav a:hover{background:linear-gradient(90deg,var(--ac),var(--ac-2));color:#fff;box-shadow:var(--shadow)}
+main{flex:1;padding:28px;max-width:1200px}.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.stat b{font-size:28px;display:block;margin-top:8px}
+textarea{width:100%;min-height:160px;border-radius:12px;border:1px solid var(--bd);background:rgba(148,163,184,.04);color:var(--tx);padding:12px;font:inherit;resize:vertical}
+button,select,input{padding:9px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font:inherit;transition:.2s ease}
+button:hover,select:hover,input:hover{border-color:var(--ac-2)}
+button.p{background:linear-gradient(90deg,var(--ac),var(--ac-2));color:#fff;border:0;cursor:pointer;box-shadow:0 10px 20px rgba(37,99,235,.22)}
+button.p:hover{filter:brightness(1.03)}
+input[type="file"]{padding:8px;border-style:dashed;background:rgba(148,163,184,.04)}
+select{min-width:110px}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px 8px;border-bottom:1px solid var(--bd)}th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.b{padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;display:inline-block}.HIGH{background:#fee4e2;color:var(--danger)}.MEDIUM{background:#fef0c7;color:var(--warn)}.LOW{background:#d1fadf;color:var(--ok)}.CRITICAL{background:#b42318;color:#fff}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}pre{white-space:pre-wrap;margin:0;line-height:1.6}mark{background:rgba(59,130,246,.15);border-radius:4px;padding:0 2px;color:var(--tx);font-weight:600}
+#toast{position:fixed;right:16px;bottom:16px;background:#0f172a;color:#fff;padding:10px 14px;border-radius:999px;display:none;box-shadow:var(--shadow)}
+@media(max-width:820px){body{display:block}nav{width:auto;height:auto;position:relative;border-right:none;border-bottom:1px solid var(--bd)}main{padding:18px}.cols{grid-template-columns:1fr}}
+</style></head><body>
+<nav><h2>🛡️ PII Guard</h2><a data-p="scan" class="on">Text Scanner</a><a data-p="docs">Documents</a><a data-p="ana">Analytics</a><a data-p="aud">Audit Logs</a><a id="out">Sign out</a></nav>
+<main>
+<div id="login" class="card"><h3>Sign in</h3><input id="em" placeholder="email"> <input id="pw" type="password" placeholder="password (8+ chars)">
+<button class="p" onclick="auth('login')">Login</button> <button onclick="auth('register')">Register</button><p style="color:var(--mut)">First registered user becomes ADMIN.</p></div>
+<section id="scan" class="pg"><div class="card"><textarea id="txt">Rahul Kumar works at ABC Technologies. His email is rahul.kumar@example.com and phone number is 9876543210. His PAN is ABCDE1234F.</textarea>
+<p><select id="st"><option>FULL<option>PARTIAL<option>CHAR<option>TOKEN<option>SYNTHETIC<option>HASH</select>
+<select id="md"><option>HYBRID<option>REGEX_ONLY<option>NLP_ONLY</select>
+<button class="p" onclick="scan()">Analyze &amp; Mask</button> <button onclick="txt.value='';res.innerHTML=''">Clear</button></p></div><div class="card" id="history"><b>Saved scans</b><p style="color:var(--mut)">Sign in to view your scan history.</p></div><div id="res"></div></section>
+<section id="docs" class="pg" hidden><div class="card"><h3>Upload (TXT, CSV, DOCX, PDF, XLSX)</h3><input type="file" id="f" multiple><button class="p" onclick="upload()">Scan files</button></div><div class="card" id="dl"></div></section>
+<section id="ana" class="pg" hidden><div class="grid" id="kpi"></div><div class="grid"><div class="card"><canvas id="c1"></canvas></div><div class="card"><canvas id="c2"></canvas></div></div></section>
+<section id="aud" class="pg" hidden><div class="card" id="al"></div></section></main><div id="toast"></div>
+<script>
+let T=localStorage.t||"",$=i=>document.getElementById(i);const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const ICON={HIGH:"▲",MEDIUM:"◆",LOW:"●",CRITICAL:"⛔"},badge=r=>`<span class="b ${r}">${ICON[r]} ${r}</span>`;
+const toast=m=>{$("toast").textContent=m;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3000)};
+async function api(p,o={}){o.headers={...(o.headers||{}),Authorization:"Bearer "+T};const r=await fetch("/api"+p,o);
+ if(!r.ok){const e=await r.json().catch(()=>({}));toast(e.error?.message||"Error "+r.status);if(r.status==401){T="";localStorage.t="";show();}throw 0}return r}
+function show(){const logged=!!T&&T!=="x";$("login").hidden=logged;document.querySelectorAll(".pg").forEach(p=>p.hidden=!logged && p.id!=="scan");document.querySelectorAll("nav a[data-p]").forEach(a=>a.classList.toggle("on", !logged ? a.dataset.p=="scan" : a.classList.contains("on")))}
+async function auth(k){const email=$("em").value.trim();const password=$("pw").value; if(!email||password.length<8){return toast("Enter a valid email and a password with at least 8 characters.");}
+ const r=await fetch("/api/auth/"+k,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
+ const j=await r.json();if(!r.ok)return toast(j.error?.message||"Failed (password needs 8+ chars)");T=j.access_token;localStorage.t=T;$("pw").value="";show();toast("Signed in as "+j.role);loadScans();if(k=="register"){$("em").value="";}}
+$("out").onclick=()=>{T="";localStorage.t="";show();toast("Signed out");$("em").value="";$("pw").value="";};
+document.querySelectorAll("nav a[data-p]").forEach(a=>a.onclick=()=>{document.querySelectorAll("nav a").forEach(x=>x.classList.remove("on"));a.classList.add("on");
+ document.querySelectorAll(".pg").forEach(p=>p.hidden=p.id!=a.dataset.p);({docs:docs,ana:ana,aud:aud}[a.dataset.p]||(()=>{}))()});
+async function scan(){const text=$("txt").value,r=await(await api("/scan/text",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,strategy:$("st").value,mode:$("md").value})})).json();renderScan(text,r);loadScans()}
+function renderScan(text,r){
+ let h="",p=0;r.entities.forEach(e=>{h+=esc(text.slice(p,e.start))+`<mark class="${e.risk}" title="${e.type}">${esc(e.text)}</mark>`;p=e.end});h+=esc(text.slice(p));
+ $("res").innerHTML=`<div class="card">Document risk: ${badge(r.risk_level)} score ${r.risk_score} · ${r.summary.total_entities} entities</div>
+ <div class="cols"><div class="card"><b>Original</b><pre>${h}</pre></div><div class="card"><b>Masked</b><pre>${esc(r.masked_text)}</pre></div></div>
+ <div class="card"><table><tr><th>Entity<th>Type<th>Confidence<th>Risk<th>Method<th>Why detected</tr>${r.entities.map(e=>`<tr><td>${esc(e.text)}<td>${e.type}<td>${Math.round(e.confidence*100)}%<td>${badge(e.risk)}<td>${e.method}<td>${esc(e.explanation)}</tr>`).join("")}</table></div>`}
+async function loadScans(){if(!T)return;try{const r=await(await api("/scans?size=30")).json();const items=r.items||[];$("history").innerHTML="<b>Saved scans</b>"+(items.length?items.map(s=>`<button type=\"button\" class=\"scan-history\" data-id=\"${esc(s.id)}\" style=\"display:block;width:100%;text-align:left;margin-top:8px\">${esc(s.created_at.slice(0,16).replace("T"," "))} · ${esc(s.input_text.replace(/\s+/g," ").slice(0,90))}</button>`).join(""):'<p style="color:var(--mut)">No saved scans yet.</p>');document.querySelectorAll(".scan-history").forEach(b=>b.onclick=()=>restoreScan(b.dataset.id))}catch{}}
+async function restoreScan(id){const r=await(await api(`/scans/${encodeURIComponent(id)}`)).json();$("txt").value=r.input_text;$("st").value=r.strategy;renderScan(r.input_text,r);toast("Saved scan restored")}
+async function upload(){if(!$("f").files.length)return toast("Select a file to upload.");const files=[...$("f").files];for(const f of files){const fd=new FormData();fd.append("file",f);fd.append("strategy",$("st").value);try{await api("/scan/document",{method:"POST",body:fd});toast("Scanned "+f.name)}catch{}}docs()}
+async function docs(){const r=await(await api("/documents")).json();$("dl").innerHTML="<table><tr><th>File<th>Size<th>PII<th>Risk<th>Date<th></tr>"+r.items.map(d=>`<tr><td>${esc(d.filename)}<td>${d.size}<td>${d.entity_count}<td>${badge(d.risk_level)} ${d.risk_score}<td>${d.created_at.slice(0,16)}<td><button onclick="dlf('${d.id}')">Download</button></tr>`).join("")+"</table>"}
+async function dlf(id){const r=await api(`/documents/${id}/download`);const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download="sanitized.txt";a.click()}
+let ch=[];async function ana(){const s=await(await api("/analytics/summary")).json();$("kpi").innerHTML=[["Documents",s.documents],["PII detected",s.entities],["Avg confidence",Math.round(s.avg_confidence*100)+"%"],["High risk",s.by_risk.HIGH||0]].map(k=>`<div class="card stat">${k[0]}<b>${k[1]}</b></div>`).join("");
+ ch.forEach(c=>c.destroy());ch=[new Chart($("c1"),{type:"bar",data:{labels:Object.keys(s.by_type),datasets:[{label:"PII by type",data:Object.values(s.by_type)}]}}),new Chart($("c2"),{type:"doughnut",data:{labels:Object.keys(s.by_risk),datasets:[{data:Object.values(s.by_risk)}]}})]}
+async function aud(){const r=await(await api("/audit-logs")).json();$("al").innerHTML="<table><tr><th>Time<th>Action<th>Doc<th>Detected<th>Masked<th>Risk</tr>"+r.map(a=>`<tr><td>${a.timestamp.slice(0,19)}<td>${a.action}<td>${a.document_id||"-"}<td>${a.detected}<td>${a.masked}<td>${badge(a.risk_level)}</tr>`).join("")+"</table>"}
+if(localStorage.t){T=localStorage.t;}show();if(T)loadScans();
+</script></body></html>

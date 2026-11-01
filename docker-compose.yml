@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pii
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
+      POSTGRES_DB: pii
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  app:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://pii:${DB_PASSWORD:-change-me}@postgres:5432/pii
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-10485760}
+      RETENTION_DAYS: ${RETENTION_DAYS:-1}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-120}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+volumes:
+  pgdata: {}
